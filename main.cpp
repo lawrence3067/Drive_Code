@@ -1,5 +1,6 @@
 #include "main.h"
 
+using namespace okapi;
 /**
  * A callback function for LLEMU's center button.
  *
@@ -15,6 +16,36 @@ void on_center_button() {
 		pros::lcd::clear_line(2);
 	}
 }
+
+std::shared_ptr<ChassisController> drive =
+  ChassisControllerBuilder()
+  .withMotors({1, 2}, {-6, -8})
+  .withDimensions(AbstractMotor::gearset::green, {{4.125_in, 10_in}, imev5GreenTPR})
+  .build();
+
+
+okapi::Controller controller;
+okapi::Motor four_bar_lift(10, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
+okapi::Motor chain_bar(9, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
+
+struct PID
+{
+	float kP;
+	float kI;
+	float kD;
+	float integral;
+	float derivative;
+	float error;
+	float prev_error;
+	float speed;
+	float target;
+	float sensor_value;
+};
+
+typedef struct PID pid;
+
+pid C_B;
+
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -75,5 +106,48 @@ void autonomous() {}
  */
 void opcontrol()
 {
-	user_drive();
+	float setpoint = chain_bar.tarePosition();
+	while (1)
+	{
+		//float leftJoyValue = controller.getAnalog(ControllerAnalog::leftY);
+		//float rightJoyValue = controller.getAnalog(ControllerAnalog::rightY);
+		drive -> getModel() -> tank(controller.getAnalog(ControllerAnalog::leftY),
+																controller.getAnalog(ControllerAnalog::rightY), 5);
+
+		//Four Bar Buttons
+		if (controller.getDigital(ControllerDigital::L1) == 1)
+		{
+			four_bar_lift.moveVoltage(8000);
+		}
+		if (controller.getDigital(ControllerDigital::L1) == 0 and controller.getDigital(ControllerDigital::L2) == 0)
+		{
+			four_bar_lift.moveVoltage(0);
+		}
+		if (controller.getDigital(ControllerDigital::L2) == 1)
+		{
+			four_bar_lift.moveVoltage(-8000);
+		}
+
+
+		//Chain Bar Buttons
+		if (controller.getDigital(ControllerDigital::R1) == 1)
+		{
+			chain_bar.moveVoltage(8000);
+			setpoint = chain_bar.getPosition();
+		}
+		else if (controller.getDigital(ControllerDigital::R2) == 1)
+		{
+			chain_bar.moveVoltage(-8000);
+			setpoint = chain_bar.getPosition();
+		}
+		else if (controller.getDigital(ControllerDigital::R2) == 0 and (controller.getDigital(ControllerDigital::R1) == 0))
+		{
+			C_B.kP = 0;
+			C_B.kI = 0;
+			C_B.kD = 0;
+			C_B.target = setpoint;
+			C_B.error = setpoint - chain_bar.getPosition();
+		}
+		pros::delay(20);
+	}
 }
