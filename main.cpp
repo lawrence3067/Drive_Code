@@ -28,6 +28,8 @@ okapi::Controller controller;
 okapi::Motor four_bar_lift(10, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
 okapi::Motor chain_bar(9, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
 
+float chain_bar_speed;
+
 struct PID
 {
 	float kP;
@@ -44,7 +46,7 @@ struct PID
 
 typedef struct PID pid;
 
-pid C_B;
+pid CB;
 
 
 /**
@@ -107,6 +109,7 @@ void autonomous() {}
 void opcontrol()
 {
 	float setpoint = chain_bar.tarePosition();
+	chain_bar_speed = 8000;
 	while (1)
 	{
 		//float leftJoyValue = controller.getAnalog(ControllerAnalog::leftY);
@@ -132,21 +135,27 @@ void opcontrol()
 		//Chain Bar Buttons
 		if (controller.getDigital(ControllerDigital::R1) == 1)
 		{
-			chain_bar.moveVoltage(8000);
+			chain_bar.moveVoltage(chain_bar_speed);
 			setpoint = chain_bar.getPosition();
 		}
 		else if (controller.getDigital(ControllerDigital::R2) == 1)
 		{
-			chain_bar.moveVoltage(-8000);
+			chain_bar.moveVoltage(-chain_bar_speed);
 			setpoint = chain_bar.getPosition();
 		}
 		else if (controller.getDigital(ControllerDigital::R2) == 0 and (controller.getDigital(ControllerDigital::R1) == 0))
 		{
-			C_B.kP = 0;
-			C_B.kI = 0;
-			C_B.kD = 0;
-			C_B.target = setpoint;
-			C_B.error = setpoint - chain_bar.getPosition();
+			CB.kP = 0;
+			CB.kI = 0;
+			CB.kD = 0;
+			CB.target = setpoint;
+			CB.error = setpoint - chain_bar.getPosition();
+			CB.derivative = CB.error - CB.prev_error;
+			CB.integral += CB.error;
+			CB.prev_error = CB.error;
+			CB.speed = CB.error * CB.kP + CB.integral * CB.kI + CB.derivative * CB.kD;
+			chain_bar_speed = CB.speed;
+			chain_bar.moveVoltage(chain_bar_speed);
 		}
 		pros::delay(20);
 	}
