@@ -17,18 +17,23 @@ void on_center_button() {
 	}
 }
 
+//Drivetrain Controller Initialization
 std::shared_ptr<ChassisController> drive =
   ChassisControllerBuilder()
-  .withMotors({1, 2}, {-6, -8})
-  .withDimensions(AbstractMotor::gearset::green, {{4.125_in, 10_in}, imev5GreenTPR})
+  .withMotors({1, 2}, {-6, -8}) //MotorGroups for left and right side
+  .withDimensions(AbstractMotor::gearset::green, {{4_in, 10_in}, imev5GreenTPR}) //Gearset(rpm) and wheel dimensions
   .build();
 
 
+//Controller Initialization
 okapi::Controller controller;
+
+//Misc Motor Initialization
 okapi::Motor four_bar_lift(10, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
 okapi::Motor chain_bar(9, false, AbstractMotor::gearset::green, AbstractMotor::encoderUnits::rotations);
 
-float chain_bar_speed;
+double chain_bar_speed = 0;
+double four_bar_speed = 0;
 
 struct PID
 {
@@ -46,9 +51,89 @@ struct PID
 
 typedef struct PID pid;
 
-pid CB;
+pid CB; //Chain bar PID
+pid FB; //Four bar PID
+pid left_drive_PID; //PID for drivetrain
+pid right_drive_PID;
 
 
+double chain_bar_PID(double chain_bar_setpoint) //PID to keep chain bar stationary in the air
+{
+	CB.kP = 9.5;
+	CB.kI = 0;
+	CB.kD = 9.5;
+	CB.target = chain_bar_setpoint;
+	CB.error = CB.target - chain_bar.getPosition();
+	CB.derivative = CB.error - CB.prev_error;
+	CB.integral += CB.error;
+	CB.prev_error = CB.error;
+	CB.speed = CB.error * CB.kP + CB.integral * CB.kI + CB.derivative * CB.kD;
+	//pros::lcd::set_text(3, std::to_string(CB.speed));
+	return CB.speed;
+}
+
+double four_bar_PID(double four_bar_setpoint) //PID to keep four bar stationary in the air
+{
+	FB.kP = 0; //need tuning
+	FB.kI = 0; //need tuning
+	FB.kD = 0; //need tuning
+	FB.target = four_bar_setpoint;
+	FB.error = FB.target - four_bar_lift.getPosition();
+	FB.derivative = FB.error - FB.prev_error;
+	FB.integral += FB.error;
+	FB.prev_error = FB.error;
+	FB.speed = FB.kP * FB.error + FB.kI * FB.integral + FB.kD * FB.derivative;
+	//pros::lcd::set_text(3, std::to_string(FB.speed));
+	return FB.speed;
+}
+
+void movement_PID(double left_distance, double right_distance)
+{
+	// calculates left side motors target distance in wheel degrees
+	double left_target = left_distance * (360 / (2 * 3.1415 * (4 / 2)));
+	// calculates right side motors target distance in wheel degrees
+	double right_target = right_distance * (360 / (2 * 3.1415 * (4 / 2)));
+
+	//PID constants
+	left_drive_PID.kP = 0;
+	left_drive_PID.kI = 0;
+	left_drive_PID.kD = 0;
+
+	right_drive_PID.kP = 0;
+	right_drive_PID.kI = 0;
+	right_drive_PID.kD = 0;
+
+	//initializes left and right side drivetrain PID controllers
+	auto left_pid_controller = IterativeControllerFactory::posPID(left_drive_PID.kP,
+																																left_drive_PID.kI,
+																																left_drive_PID.kD);
+
+	auto right_pid_controller = IterativeControllerFactory::posPID(right_drive_PID.kP,
+																																 right_drive_PID.kI,
+																																 right_drive_PID.kD);
+
+	drive -> getModel() -> resetSensors(); //reset sensor values before use
+
+	while (true)
+	{
+		left_drive_PID.error = left_target - drive -> getModel() -> getSensorVals()[0];
+		left_drive_PID.speed = left_pid_controller.step(left_drive_PID.error); //returns speed for left side
+
+		right_drive_PID.error = right_target - drive -> getModel() -> getSensorVals()[0];
+		right_drive_PID.speed = right_pid_controller.step(right_drive_PID.error); //returns speed for right side
+
+		drive -> getModel() -> tank(left_drive_PID.speed, right_drive_PID.speed);
+
+		pros::delay(10);
+		if (left_drive_PID.error == 0 and right_drive_PID.error == 0)
+		{
+			break;
+		}
+	}
+
+	drive -> getModel() -> tank(0, 0); //brakes drivetrain right after PId movement
+
+}
 /**
  * Runs initialization code. This occurs as soon as the program is started.
  *
@@ -108,55 +193,54 @@ void autonomous() {}
  */
 void opcontrol()
 {
-	float setpoint = chain_bar.tarePosition();
-	chain_bar_speed = 8000;
-	while (1)
+	double chain_bar_setpoint = chain_bar.getPosition(); //Marks position of chain bar
+	double four_bar_setpoint = four_bar_lift.getPosition(); //Marks position of four bar
+
+
+	while (true)
 	{
-		//float leftJoyValue = controller.getAnalog(ControllerAnalog::leftY);
-		//float rightJoyValue = controller.getAnalog(ControllerAnalog::rightY);
+		//Main drivetrain code
 		drive -> getModel() -> tank(controller.getAnalog(ControllerAnalog::leftY),
-																controller.getAnalog(ControllerAnalog::rightY), 5);
+																controller.getAnalog(ControllerAnalog::rightY));
 
 		//Four Bar Buttons
 		if (controller.getDigital(ControllerDigital::L1) == 1)
 		{
-			four_bar_lift.moveVoltage(8000);
+			//Moves four bar up when L1 is pressed
+			four_bar_lift.moveVelocity(100);
+			four_bar_setpoint = four_bar_lift.getPosition();
 		}
-		if (controller.getDigital(ControllerDigital::L1) == 0 and controller.getDigital(ControllerDigital::L2) == 0)
+		else if (controller.getDigital(ControllerDigital::L2) == 1)
 		{
-			four_bar_lift.moveVoltage(0);
+			//Moves four bar down when L2 is pressed
+			four_bar_lift.moveVelocity(-100);
+			four_bar_setpoint = four_bar_lift.getPosition();
 		}
-		if (controller.getDigital(ControllerDigital::L2) == 1)
+		else if((controller.getDigital(ControllerDigital::L1) == 0) and controller.getDigital(ControllerDigital::L2) == 0)
 		{
-			four_bar_lift.moveVoltage(-8000);
+			four_bar_speed = four_bar_PID(four_bar_setpoint);
+			four_bar_lift.moveVelocity(four_bar_speed);
 		}
 
 
 		//Chain Bar Buttons
-		if (controller.getDigital(ControllerDigital::R1) == 1)
+		if (controller.getDigital(ControllerDigital::R2) == 1)
 		{
-			chain_bar.moveVoltage(chain_bar_speed);
-			setpoint = chain_bar.getPosition();
+			chain_bar.moveVelocity(75);
+			chain_bar_setpoint = chain_bar.getPosition();
 		}
-		else if (controller.getDigital(ControllerDigital::R2) == 1)
+		else if (controller.getDigital(ControllerDigital::R1) == 1)
 		{
-			chain_bar.moveVoltage(-chain_bar_speed);
-			setpoint = chain_bar.getPosition();
+			chain_bar.moveVelocity(-75);
+			chain_bar_setpoint = chain_bar.getPosition();
 		}
 		else if (controller.getDigital(ControllerDigital::R2) == 0 and (controller.getDigital(ControllerDigital::R1) == 0))
 		{
-			CB.kP = 0;
-			CB.kI = 0;
-			CB.kD = 0;
-			CB.target = setpoint;
-			CB.error = setpoint - chain_bar.getPosition();
-			CB.derivative = CB.error - CB.prev_error;
-			CB.integral += CB.error;
-			CB.prev_error = CB.error;
-			CB.speed = CB.error * CB.kP + CB.integral * CB.kI + CB.derivative * CB.kD;
-			chain_bar_speed = CB.speed;
-			chain_bar.moveVoltage(chain_bar_speed);
+			chain_bar_speed = chain_bar_PID(chain_bar_setpoint);
+			chain_bar.moveVelocity(chain_bar_speed);
 		}
+
 		pros::delay(20);
+
 	}
 }
