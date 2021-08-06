@@ -217,6 +217,8 @@ void autonomous()
  */
 void opcontrol()
 {
+	//movement_PID(13.5, -13.5);
+	//movement_PID(10, 10);
 	double chain_bar_setpoint = chain_bar.getPosition();    //Marks position of chain bar
 	double four_bar_setpoint = four_bar_lift.getPosition(); //Marks position of four bar
 
