@@ -69,7 +69,7 @@ std::shared_ptr<ChassisController> drive =
   .build();
 
 
-double chain_bar_PID(double chain_bar_set) //PID for chain bar
+double chain_bar_PID(double chain_bar_set) 							//PID for chain bar
 {
 	CB.kP = 0.3;
 	CB.kI = 0.0003;
@@ -86,7 +86,7 @@ double chain_bar_PID(double chain_bar_set) //PID for chain bar
 	pros::delay(10);
 }
 
-double four_bar_PID(double four_bar_setpoint) //PID for four bar
+double four_bar_PID(double four_bar_setpoint) 					//PID for four bar
 {
 	FB.kP = 0; //need tuning
 	FB.kI = 0; //need tuning
@@ -105,10 +105,9 @@ double four_bar_PID(double four_bar_setpoint) //PID for four bar
 void movement_PID(double left_distance, double right_distance)
 {
 	drive -> getModel() -> setEncoderUnits(AbstractMotor::encoderUnits::degrees);
-	// calculates left side motors target distance in wheel degrees
-	double left_target = left_distance * (360 / (2 * 3.1415 * (4 / 2)));
-	// calculates right side motors target distance in wheel degrees
-	double right_target = right_distance * (360 / (2 * 3.1415 * (4 / 2)));
+
+	double left_target = left_distance * (360 / (2 * 3.1415 * (4 / 2)));				// calculates left side motors target distance in wheel degrees
+	double right_target = right_distance * (360 / (2 * 3.1415 * (4 / 2)));			// calculates right side motors target distance in wheel degrees
 
 	//PID constants
 	left_drive_PID.kP = 0.001575;
@@ -128,17 +127,17 @@ void movement_PID(double left_distance, double right_distance)
 																																 right_drive_PID.kI,
 																																 right_drive_PID.kD);
 
-	drive -> getModel() -> resetSensors(); //reset sensor values before use
+	drive -> getModel() -> resetSensors(); 																								//reset sensor values before use
 
 	while (true)
 	{
 		//pros::lcd::set_text(3, std::to_string(drive -> getModel() -> getSensorVals()[0]));
 		left_drive_PID.error = left_target - drive -> getModel() -> getSensorVals()[0];
-		left_drive_PID.speed = left_pid_controller.step(left_drive_PID.error); //returns speed for left side
+		left_drive_PID.speed = left_pid_controller.step(left_drive_PID.error); 							//returns speed for left side
 		pros::lcd::set_text(5, std::to_string(left_drive_PID.error));
 
 		right_drive_PID.error = right_target - drive -> getModel() -> getSensorVals()[1];
-		right_drive_PID.speed = right_pid_controller.step(right_drive_PID.error); //returns speed for right side
+		right_drive_PID.speed = right_pid_controller.step(right_drive_PID.error); 					//returns speed for right side
 		pros::lcd::set_text(6, std::to_string(right_drive_PID.error));
 
 		pros::lcd::set_text(1, std::to_string(leftBack.getPosition()));
@@ -155,7 +154,7 @@ void movement_PID(double left_distance, double right_distance)
 		}
 	}
 
-	drive -> getModel() -> tank(0, 0); //brakes drivetrain right after PId movement
+	drive -> getModel() -> tank(0, 0); 								//brakes drivetrain right after PId movement
 
 }
 
@@ -222,7 +221,7 @@ void autonomous()
  */
 void opcontrol()
 {
-	movement_PID(40, 40);
+	//movement_PID(40, 40);
 	//movement_PID(24.5, -24.5);
 	//movement_PID(40, 40);
 	double chain_bar_setpoint = chain_bar.getPosition();    //Marks position of chain bar
