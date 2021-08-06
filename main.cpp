@@ -64,8 +64,8 @@ pid right_drive_PID;		//PID for right side of drivetrain
 //Drivetrain Controller Initialization
 std::shared_ptr<ChassisController> drive =
   ChassisControllerBuilder()
-  .withMotors({leftBack, leftFront}, {rightFront, rightBack}) //MotorGroups for left and right side
-  .withDimensions(AbstractMotor::gearset::green, {{4_in, 10_in}, imev5GreenTPR}) //Gearset(rpm) and wheel dimensions
+  .withMotors({leftBack, leftFront}, {rightFront, rightBack}) 												//MotorGroups for left and right side
+  .withDimensions(AbstractMotor::gearset::green, {{4_in, 10_in}, imev5GreenTPR})		  //Gearset(rpm) and wheel dimensions
   .build();
 
 
@@ -135,16 +135,21 @@ void movement_PID(double left_distance, double right_distance)
 		//pros::lcd::set_text(3, std::to_string(drive -> getModel() -> getSensorVals()[0]));
 		left_drive_PID.error = left_target - drive -> getModel() -> getSensorVals()[0];
 		left_drive_PID.speed = left_pid_controller.step(left_drive_PID.error); //returns speed for left side
-		//pros::lcd::set_text(4, std::to_string(left_drive_PID.speed));
+		pros::lcd::set_text(5, std::to_string(left_drive_PID.error));
 
 		right_drive_PID.error = right_target - drive -> getModel() -> getSensorVals()[1];
 		right_drive_PID.speed = right_pid_controller.step(right_drive_PID.error); //returns speed for right side
-		//pros::lcd::set_text(5, std::to_string(right_drive_PID.speed));
+		pros::lcd::set_text(6, std::to_string(right_drive_PID.error));
+
+		pros::lcd::set_text(1, std::to_string(leftBack.getPosition()));
+		pros::lcd::set_text(2, std::to_string(leftFront.getPosition()));
+		pros::lcd::set_text(3, std::to_string(rightBack.getPosition()));
+		pros::lcd::set_text(4, std::to_string(rightFront.getPosition()));
 
 		drive -> getModel() -> tank(-left_drive_PID.speed, -right_drive_PID.speed);
 
 		pros::delay(20);
-		if (left_drive_PID.error == 0 and right_drive_PID.error == 0)
+		if (abs(left_drive_PID.error) < 0.1 and abs(right_drive_PID.error) < 0.1)
 		{
 			break;
 		}
@@ -217,15 +222,15 @@ void autonomous()
  */
 void opcontrol()
 {
-	//movement_PID(13.5, -13.5);
-	//movement_PID(10, 10);
+	movement_PID(40, 40);
+	//movement_PID(24.5, -24.5);
+	//movement_PID(40, 40);
 	double chain_bar_setpoint = chain_bar.getPosition();    //Marks position of chain bar
 	double four_bar_setpoint = four_bar_lift.getPosition(); //Marks position of four bar
 
 	while (true)
 	{
 		//Main drivetrain code
-		//movement_PID(1, 1);
 		drive -> getModel() -> tank(controller.getAnalog(ControllerAnalog::leftY),
 																controller.getAnalog(ControllerAnalog::rightY));
 
